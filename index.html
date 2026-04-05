@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KatzenVokal-Analyzer — Institut für angewandte Felinistik</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e0e0f;
+    --bg2: #161618;
+    --bg3: #1e1e21;
+    --border: rgba(255,255,255,0.08);
+    --border2: rgba(255,255,255,0.14);
+    --text: #f0efe8;
+    --text2: #9a998f;
+    --text3: #5a5952;
+    --green: #3ddc84;
+    --green2: #1a6640;
+    --amber: #f0a830;
+    --red: #e05a5a;
+    --blue: #5b9cf6;
+    --teal: #2dd4bf;
+    --radius: 10px;
+    --radius-lg: 16px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 14px;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .page { position: relative; z-index: 1; max-width: 680px; margin: 0 auto; padding: 3rem 1.5rem 4rem; }
+
+  header { margin-bottom: 3rem; }
+  .institute { font-size: 11px; color: var(--text3); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 1rem; }
+  .institute span { color: var(--green); }
+  h1 {
+    font-family: 'Instrument Serif', serif;
+    font-size: clamp(2rem, 5vw, 3rem);
+    font-weight: 400;
+    line-height: 1.1;
+    color: var(--text);
+    margin-bottom: 0.5rem;
+  }
+  h1 em { font-style: italic; color: var(--green); }
+  .tagline { font-size: 12px; color: var(--text3); letter-spacing: 0.04em; }
+
+  .card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+  }
+  .card-label {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--text3);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  canvas {
+    width: 100%;
+    display: block;
+    border-radius: var(--radius);
+    background: var(--bg3);
+  }
+  #specCanvas { height: 90px; }
+  #waveCanvas { height: 56px; margin-top: 8px; }
+
+  .freq-labels { display: flex; justify-content: space-between; margin-top: 3px; padding: 0 2px; }
+  .freq-label { font-size: 9px; color: var(--text3); }
+
+  .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+  .metric { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 10px; }
+  .m-label { font-size: 9px; color: var(--text3); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 4px; }
+  .m-val { font-size: 17px; font-weight: 500; color: var(--text); line-height: 1; }
+  .m-unit { font-size: 9px; color: var(--text3); font-weight: 300; }
+  .m-val.live { color: var(--green); }
+
+  .btn-row { display: flex; gap: 8px; margin-top: 12px; }
+  .btn { flex: 1; padding: 10px 16px; font-size: 13px; font-family: 'DM Mono', monospace; font-weight: 500; letter-spacing: 0.04em; border-radius: var(--radius); border: 1px solid var(--border2); background: var(--bg3); color: var(--text2); cursor: pointer; transition: all 0.15s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .btn:hover:not(:disabled) { background: var(--bg2); border-color: rgba(255,255,255,0.2); color: var(--text); }
+  .btn:disabled { opacity: 0.3; cursor: default; }
+  .btn.rec { background: rgba(224, 90, 90, 0.12); border-color: rgba(224, 90, 90, 0.4); color: var(--red); }
+  .btn.primary { background: rgba(61, 220, 132, 0.1); border-color: rgba(61, 220, 132, 0.3); color: var(--green); }
+  .btn.primary:hover:not(:disabled) { background: rgba(61, 220, 132, 0.18); border-color: rgba(61, 220, 132, 0.5); }
+  .rec-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--red); animation: pulse 0.8s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.2} }
+
+  .profile-row { display: flex; align-items: center; gap: 10px; margin-bottom: 7px; }
+  .profile-name { font-size: 11px; color: var(--text2); min-width: 150px; }
+  .profile-track { flex: 1; height: 4px; background: var(--bg3); border-radius: 2px; overflow: hidden; }
+  .profile-fill { height: 100%; border-radius: 2px; transition: width 0.6s ease; }
+  .profile-pct { font-size: 11px; color: var(--text3); min-width: 32px; text-align: right; }
+
+  .result-box { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.1rem; margin-top: 10px; min-height: 70px; }
+  .result-text { font-size: 14px; color: var(--text); line-height: 1.7; }
+  .result-meta { font-size: 11px; color: var(--text3); margin-top: 8px; font-style: italic; }
+  .conf-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+  .conf-label { font-size: 10px; color: var(--text3); letter-spacing: 0.06em; min-width: 70px; text-transform: uppercase; }
+  .conf-track { flex: 1; height: 3px; background: var(--bg3); border-radius: 2px; overflow: hidden; border: 1px solid var(--border); }
+  .conf-fill { height: 100%; background: var(--green); border-radius: 2px; transition: width 0.6s ease; }
+  .conf-val { font-size: 11px; color: var(--green); min-width: 36px; text-align: right; }
+
+  .tag-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+  .tag { font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; padding: 3px 9px; border-radius: 20px; border: 1px solid; }
+  .tag-green { background: rgba(61,220,132,0.08); color: var(--green); border-color: rgba(61,220,132,0.25); }
+  .tag-amber { background: rgba(240,168,48,0.08); color: var(--amber); border-color: rgba(240,168,48,0.25); }
+  .tag-blue { background: rgba(91,156,246,0.08); color: var(--blue); border-color: rgba(91,156,246,0.25); }
+  .tag-red { background: rgba(224,90,90,0.08); color: var(--red); border-color: rgba(224,90,90,0.25); }
+
+  .loading { display: flex; gap: 5px; align-items: center; padding: 6px 0; }
+  .ld { width: 5px; height: 5px; border-radius: 50%; background: var(--text3); animation: ldbounce 1.2s infinite; }
+  .ld:nth-child(2){ animation-delay: 0.2s; }
+  .ld:nth-child(3){ animation-delay: 0.4s; }
+  @keyframes ldbounce { 0%,80%,100%{transform:scale(0.6);opacity:0.3}40%{transform:scale(1);opacity:1} }
+
+  .sci-note { font-size: 11px; color: var(--text3); line-height: 1.6; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); font-style: italic; }
+
+  .api-row { display: flex; gap: 8px; margin-bottom: 1rem; }
+  .api-input { flex: 1; background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text2); font-family: 'DM Mono', monospace; font-size: 12px; padding: 8px 12px; outline: none; transition: border-color 0.15s; }
+  .api-input:focus { border-color: var(--border2); }
+  .api-input::placeholder { color: var(--text3); }
+  .api-save { padding: 8px 14px; font-size: 12px; font-family: 'DM Mono', monospace; border-radius: var(--radius); border: 1px solid var(--border2); background: var(--bg3); color: var(--text2); cursor: pointer; transition: all 0.15s; }
+  .api-save:hover { color: var(--text); border-color: rgba(255,255,255,0.2); }
+  .api-status { font-size: 10px; color: var(--text3); margin-top: 4px; }
+
+  footer { margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--border); font-size: 10px; color: var(--text3); letter-spacing: 0.05em; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+  footer a { color: var(--text3); text-decoration: none; }
+  footer a:hover { color: var(--text2); }
+
+  .status-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; margin-right: 5px; }
+  .status-dot.idle { background: var(--text3); }
+  .status-dot.live { background: var(--green); animation: pulse 1s infinite; }
+  .status-dot.ready { background: var(--amber); }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <div class="institute">Institut für angewandte Felinistik · <span>v3.0.1</span> · Landshut</div>
+    <h1>Katzen<em>Vokal</em><br>Analyzer</h1>
+    <p class="tagline">Echtzeit FFT-Spektralanalyse · Akustische Klassifikation · KI-Interpretation</p>
+  </header>
+
+  <div class="card">
+    <div class="card-label">Anthropic API-Schlüssel</div>
+    <div class="api-row">
+      <input type="password" class="api-input" id="apiKey" placeholder="sk-ant-..." />
+      <button class="api-save" onclick="saveKey()">Speichern</button>
+    </div>
+    <div class="api-status" id="apiStatus">Schlüssel wird lokal im Browser gespeichert (localStorage). Nicht übertragen.</div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">
+      <span class="status-dot" id="statusDot"></span>
+      <span id="statusLabel">Bereit</span>
+    </div>
+    <canvas id="specCanvas"></canvas>
+    <div class="freq-labels">
+      <span class="freq-label">0</span>
+      <span class="freq-label">500 Hz</span>
+      <span class="freq-label">1 kHz</span>
+      <span class="freq-label">2 kHz</span>
+      <span class="freq-label">4 kHz+</span>
+    </div>
+    <canvas id="waveCanvas"></canvas>
+    <div class="metrics">
+      <div class="metric"><div class="m-label">Grundfreq.</div><div class="m-val" id="mFreq">—<span class="m-unit"> Hz</span></div></div>
+      <div class="metric"><div class="m-label">Lautstärke</div><div class="m-val" id="mVol">—<span class="m-unit"> dB</span></div></div>
+      <div class="metric"><div class="m-label">Dauer</div><div class="m-val" id="mDur">0<span class="m-unit"> s</span></div></div>
+      <div class="metric"><div class="m-label">Kontur</div><div class="m-val" id="mContour">—</div></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn" id="recBtn" onclick="toggleRec()">● Aufnahme</button>
+      <button class="btn primary" id="analyzeBtn" onclick="analyze()" disabled>Analysieren →</button>
+    </div>
+  </div>
+
+  <div class="card" id="profileCard" style="display:none">
+    <div class="card-label">Lauttyp-Klassifikation</div>
+    <div id="profileBars"></div>
+    <div class="sci-note" id="sciNote"></div>
+  </div>
+
+  <div class="card" id="resultCard" style="display:none">
+    <div class="card-label">KI-Interpretation</div>
+    <div class="result-box">
+      <div class="result-text" id="resultText"></div>
+      <div class="result-meta" id="resultMeta"></div>
+    </div>
+    <div class="conf-row">
+      <span class="conf-label">Konfidenz</span>
+      <div class="conf-track"><div class="conf-fill" id="confFill" style="width:0%"></div></div>
+      <span class="conf-val" id="confVal">—</span>
+    </div>
+    <div class="tag-row" id="tagRow"></div>
+  </div>
+
+  <footer>
+    <span>KatzenVokal-Analyzer · DanielEnki420</span>
+    <a href="https://github.com/DanielEnki420" target="_blank">github.com/DanielEnki420</a>
+    <span>McComb et al., 2009 · Schötz, 2017</span>
+  </footer>
+
+</div>
+
+<script>
+function saveKey() {
+  const key = document.getElementById('apiKey').value.trim();
+  if (key.startsWith('sk-ant-')) {
+    localStorage.setItem('anthropic_key', key);
+    document.getElementById('apiStatus').textContent = '✓ Schlüssel gespeichert.';
+    document.getElementById('apiStatus').style.color = '#3ddc84';
+  } else {
+    document.getElementById('apiStatus').textContent = '✗ Ungültiger Schlüssel';
+    document.getElementById('apiStatus').style.color = '#e05a5a';
+  }
+}
+
+window.addEventListener('load', () => {
+  const saved = localStorage.getItem('anthropic_key');
+  if (saved) { document.getElementById('apiKey').value = saved; document.getElementById('apiStatus').textContent = '✓ Gespeicherter Schlüssel geladen.'; document.getElementById('apiStatus').style.color = '#3ddc84'; }
+  resizeCanvases();
+});
+
+const specCanvas = document.getElementById('specCanvas');
+const waveCanvas = document.getElementById('waveCanvas');
+const sCtx = specCanvas.getContext('2d');
+const wCtx = waveCanvas.getContext('2d');
+
+function resizeCanvases() {
+  const w = specCanvas.parentElement.clientWidth - 40;
+  specCanvas.width = w; specCanvas.height = 90;
+  waveCanvas.width = w; waveCanvas.height = 56;
+}
+window.addEventListener('resize', resizeCanvases);
+
+let audioCtx, analyser, source, mediaStream;
+let recording = false, startTime = 0, animFrame;
+let freqHistory = [], volHistory = [], recordedData = null, durationSec = 0;
+
+function setStatus(state, label) {
+  document.getElementById('statusDot').className = 'status-dot ' + state;
+  document.getElementById('statusLabel').textContent = label;
+}
+
+async function toggleRec() { if (recording) { stopRec(); return; } await startRec(); }
+
+async function startRec() {
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 2048;
+    analyser.smoothingTimeConstant = 0.8;
+    source = audioCtx.createMediaStreamSource(mediaStream);
+    source.connect(analyser);
+    recording = true; startTime = Date.now(); freqHistory = []; volHistory = []; recordedData = null;
+    document.getElementById('recBtn').innerHTML = '<span class="rec-dot"></span> Aufnahme läuft...';
+    document.getElementById('recBtn').classList.add('rec');
+    document.getElementById('analyzeBtn').disabled = true;
+    document.getElementById('profileCard').style.display = 'none';
+    document.getElementById('resultCard').style.display = 'none';
+    setStatus('live', 'Aufnahme aktiv');
+    drawLoop();
+  } catch(e) { setStatus('idle', 'Mikrofon-Zugriff verweigert'); }
+}
+
+function stopRec() {
+  recording = false; cancelAnimationFrame(animFrame);
+  if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
+  if (audioCtx) audioCtx.close();
+  document.getElementById('recBtn').innerHTML = '● Neue Aufnahme';
+  document.getElementById('recBtn').classList.remove('rec');
+  if (freqHistory.length > 5) {
+    recordedData = { freqHistory, volHistory, duration: durationSec };
+    document.getElementById('analyzeBtn').disabled = false;
+    setStatus('ready', 'Aufnahme bereit zur Analyse');
+    buildProfile();
+  } else { setStatus('idle', 'Bereit — zu kurze Aufnahme'); }
+}
+
+function drawLoop() {
+  if (!recording) return;
+  animFrame = requestAnimationFrame(drawLoop);
+  const bufLen = analyser.frequencyBinCount;
+  const freqData = new Uint8Array(bufLen);
+  const timeData = new Uint8Array(bufLen);
+  analyser.getByteFrequencyData(freqData);
+  analyser.getByteTimeDomainData(timeData);
+  durationSec = ((Date.now() - startTime) / 1000).toFixed(1);
+  document.getElementById('mDur').innerHTML = durationSec + '<span class="m-unit"> s</span>';
+  const sw = specCanvas.width, sh = specCanvas.height;
+  sCtx.clearRect(0, 0, sw, sh);
+  const barW = sw / (bufLen / 2.5);
+  for (let i = 0; i < bufLen / 2.5; i++) {
+    const val = freqData[i] / 255;
+    const h = val * sh;
+    const freq = i * (audioCtx.sampleRate / analyser.fftSize);
+    let color;
+    if (freq < 150) color = `rgba(61,220,132,${0.4 + val * 0.6})`;
+    else if (freq < 500) color = `rgba(91,156,246,${0.4 + val * 0.6})`;
+    else if (freq < 1500) color = `rgba(240,168,48,${0.4 + val * 0.6})`;
+    else color = `rgba(224,90,90,${0.3 + val * 0.5})`;
+    sCtx.fillStyle = color;
+    sCtx.fillRect(i * barW, sh - h, Math.max(barW - 1, 1), h);
+  }
+  const ww = waveCanvas.width, wh = waveCanvas.height;
+  wCtx.clearRect(0, 0, ww, wh);
+  wCtx.beginPath();
+  wCtx.strokeStyle = 'rgba(61,220,132,0.7)';
+  wCtx.lineWidth = 1.5;
+  const sliceW = ww / bufLen;
+  let x = 0;
+  for (let i = 0; i < bufLen; i++) {
+    const v = timeData[i] / 128.0;
+    const y = v * wh / 2;
+    i === 0 ? wCtx.moveTo(x, y) : wCtx.lineTo(x, y);
+    x += sliceW;
+  }
+  wCtx.stroke();
+  let maxIdx = 0, maxVal = 0;
+  for (let i = 2; i < bufLen / 4; i++) { if (freqData[i] > maxVal) { maxVal = freqData[i]; maxIdx = i; } }
+  const fundamentalHz = Math.round(maxIdx * audioCtx.sampleRate / analyser.fftSize);
+  let rms = 0;
+  for (let i = 0; i < bufLen; i++) rms += ((timeData[i] - 128) / 128) ** 2;
+  rms = Math.sqrt(rms / bufLen);
+  const db = rms > 0 ? Math.round(20 * Math.log10(rms)) : -60;
+  if (maxVal > 25) {
+    freqHistory.push(fundamentalHz); volHistory.push(db);
+    document.getElementById('mFreq').innerHTML = fundamentalHz + '<span class="m-unit"> Hz</span>';
+    document.getElementById('mVol').innerHTML = db + '<span class="m-unit"> dB</span>';
+    if (freqHistory.length > 6) {
+      const n = Math.floor(freqHistory.length / 3);
+      const avgFirst = freqHistory.slice(0, n).reduce((a,b)=>a+b,0)/n;
+      const avgLast = freqHistory.slice(-n).reduce((a,b)=>a+b,0)/n;
+      const diff = avgLast - avgFirst;
+      document.getElementById('mContour').textContent = diff > 40 ? '↑ steig.' : diff < -40 ? '↓ fall.' : '→ stabil';
+    }
+  }
+}
+
+function buildProfile() {
+  const { freqHistory, volHistory, duration } = recordedData;
+  const avgFreq = freqHistory.reduce((a,b)=>a+b,0)/freqHistory.length;
+  const avgVol = volHistory.reduce((a,b)=>a+b,0)/volHistory.length;
+  const freqVar = Math.sqrt(freqHistory.map(f=>(f-avgFreq)**2).reduce((a,b)=>a+b,0)/freqHistory.length);
+  const n = Math.max(1, Math.floor(freqHistory.length/3));
+  const contourDiff = freqHistory.slice(-n).reduce((a,b)=>a+b,0)/n - freqHistory.slice(0,n).reduce((a,b)=>a+b,0)/n;
+  let scores = { 'Miau / Forderung': 0, 'Schnurren': 0, 'Triller / Chirpen': 0, 'Fauchen / Warnung': 0, 'Klagen / Protest': 0 };
+  if (avgFreq > 200 && avgFreq < 900 && duration < 3.5) scores['Miau / Forderung'] += 40;
+  if (Math.abs(contourDiff) > 30) scores['Miau / Forderung'] += 20;
+  if (avgVol > -25) scores['Miau / Forderung'] += 15;
+  if (avgFreq < 180 && duration > 1.5) scores['Schnurren'] += 55;
+  if (freqVar < 25) scores['Schnurren'] += 20;
+  if (freqVar > 90 && avgFreq > 450) scores['Triller / Chirpen'] += 50;
+  if (avgFreq > 700) scores['Triller / Chirpen'] += 15;
+  if (freqVar < 60 && avgFreq > 280 && avgVol < -22) scores['Fauchen / Warnung'] += 40;
+  if (duration > 2.5 && contourDiff < -60) scores['Klagen / Protest'] += 50;
+  if (avgVol > -18 && duration > 2) scores['Klagen / Protest'] += 20;
+  const maxScore = Math.max(...Object.values(scores), 1);
+  const barColors = ['#3ddc84','#5b9cf6','#f0a830','#e05a5a','#2dd4bf'];
+  const sorted = Object.entries(scores).sort((a,b)=>b[1]-a[1]);
+  document.getElementById('profileCard').style.display = 'block';
+  document.getElementById('profileBars').innerHTML = sorted.map(([name, score], i) => {
+    const pct = Math.round((score / maxScore) * 100);
+    return '<div class="profile-row"><span class="profile-name">'+name+'</span><div class="profile-track"><div class="profile-fill" style="width:'+pct+'%;background:'+barColors[i]+'"></div></div><span class="profile-pct">'+pct+'%</span></div>';
+  }).join('');
+  const dominant = sorted[0][0];
+  const sciNotes = {
+    'Miau / Forderung': 'Vokalisierungsmuster mit aufsteigender Grundfrequenz. Erwachsene Katzen miauen fast ausschließlich gegenüber Menschen. (McComb et al., Current Biology, 2009)',
+    'Schnurren': 'Frequenzbereich 25-150 Hz. Solicitation purr mit eingebettetem Schreifton ~550 Hz. (McComb, University of Sussex, 2009)',
+    'Triller / Chirpen': 'Hohe Frequenzvarianz, Prädations-Erregung, Mandibular-Tremor. (Schötz, Lund University, 2017)',
+    'Fauchen / Warnung': 'Breitbandiges Rauschen-Signal. Defensiv, universell verständlich.',
+    'Klagen / Protest': 'Fallende Frequenzkontur, hohe Amplitude. Stress oder Ablehnung.',
+  };
+  document.getElementById('sciNote').textContent = sciNotes[dominant] || '';
+  recordedData.analysis = { avgFreq: Math.round(avgFreq), avgVol: Math.round(avgVol), duration, contourDiff: Math.round(contourDiff), freqVar: Math.round(freqVar), dominant, scores };
+}
+
+async function analyze() {
+  if (!recordedData?.analysis) return;
+  const apiKey = localStorage.getItem('anthropic_key') || document.getElementById('apiKey').value.trim();
+  if (!apiKey) { alert('Bitte zuerst Anthropic API-Schlüssel eingeben.'); return; }
+  document.getElementById('resultCard').style.display = 'block';
+  document.getElementById('resultText').innerHTML = '<div class="loading"><div class="ld"></div><div class="ld"></div><div class="ld"></div></div>';
+  document.getElementById('tagRow').innerHTML = '';
+  document.getElementById('confFill').style.width = '0%';
+  document.getElementById('confVal').textContent = '—';
+  document.getElementById('resultMeta').textContent = '';
+  setStatus('live', 'KI-Analyse läuft...');
+  const a = recordedData.analysis;
+  const contourText = a.contourDiff > 40 ? 'steigend (+'+a.contourDiff+' Hz)' : a.contourDiff < -40 ? 'fallend ('+a.contourDiff+' Hz)' : 'stabil ('+a.contourDiff+' Hz)';
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-calls': 'true' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        system: 'Du bist Suzanne Schötz, Professorin für Phonetik an der Lund University. Analysiere Akustikdaten einer Katze. Wissenschaftlich präzise mit trockener Ironie. Antworte NUR mit JSON: {"interpretation": "2-3 Sätze", "konfidenz": <58-93>, "emotionaler_zustand": "ein Wort", "tags": ["t1","t2","t3"], "literatur": "Quelle"}',
+        messages: [{ role: 'user', content: 'Akustik-Parameter: F0='+a.avgFreq+'Hz, Lautstärke='+a.avgVol+'dB, Dauer='+a.duration+'s, Kontur='+contourText+', Varianz='+a.freqVar+'Hz, Typ='+a.dominant }]
+      })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
+    const parsed = JSON.parse(data.content.map(b => b.text||'').join('').replace(/```json|```/g,'').trim());
+    document.getElementById('resultText').textContent = parsed.interpretation;
+    document.getElementById('resultMeta').textContent = parsed.literatur || '';
+    document.getElementById('confFill').style.width = parsed.konfidenz + '%';
+    document.getElementById('confVal').textContent = parsed.konfidenz + '%';
+    const tagClasses = ['tag-green','tag-blue','tag-amber','tag-red'];
+    document.getElementById('tagRow').innerHTML = [parsed.emotionaler_zustand, ...(parsed.tags||[])].map((t,i) => '<span class="tag '+tagClasses[i%4]+'">'+t+'</span>').join('');
+    setStatus('ready', 'Analyse abgeschlossen');
+  } catch(e) {
+    document.getElementById('resultText').textContent = 'Fehler: ' + e.message;
+    setStatus('idle', 'Analyse fehlgeschlagen');
+  }
+}
+</script>
+</body>
+</html>
