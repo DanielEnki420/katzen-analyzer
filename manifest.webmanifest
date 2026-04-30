@@ -1,0 +1,21 @@
+{
+  "name": "KatzenVokal-Analyzer",
+  "short_name": "KatzenVokal",
+  "description": "Echtzeit FFT-Spektralanalyse und KI-Interpretation von Katzenlauten.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0e0e0f",
+  "theme_color": "#0e0e0f",
+  "lang": "de",
+  "icons": [
+    {
+      "src": "kater.jpg",
+      "sizes": "200x200",
+      "type": "image/jpeg",
+      "purpose": "any"
+    }
+  ],
+  "categories": ["education", "lifestyle", "utilities"]
+}

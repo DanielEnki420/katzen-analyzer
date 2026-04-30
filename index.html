@@ -11,6 +11,12 @@
 <meta property="og:description" content="Echtzeit FFT-Spektralanalyse und KI-Interpretation von Katzenlauten.">
 <meta property="og:url" content="https://danielenki420.github.io/katzen-analyzer/">
 <meta property="og:type" content="website">
+<!-- PWA -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0e0e0f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="KatzenVokal">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
@@ -97,13 +103,18 @@
   .status-dot.live { background: var(--green); animation: pulse 1s infinite; }
   .status-dot.ready { background: var(--amber); }
   .min-dur-hint { font-size: 10px; color: var(--text3); margin-top: 6px; text-align: center; opacity: 0.7; }
+  .play-row { display: none; align-items: center; gap: 8px; margin-top: 10px; padding: 8px 10px; background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); }
+  .play-row.show { display: flex; }
+  .play-btn { width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--border2); background: var(--bg2); color: var(--text); font-size: 11px; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; transition: all 0.15s; }
+  .play-btn:hover { border-color: var(--green); color: var(--green); }
+  .play-label { font-size: 10px; color: var(--text3); letter-spacing: 0.04em; }
   :focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
 </style>
 </head>
 <body>
 <div class="page">
   <header>
-    <div class="institute">Institut für angewandte Felinistik · <span>v3.2.0</span> · Landshut</div>
+    <div class="institute">Institut für angewandte Felinistik · <span>v3.3.0</span> · Landshut</div>
     <div class="header-title">
       <img src="kater.jpg" alt="Kater Logo" class="kater-logo">
       <h1>Katzen<em>Vokal</em><br>Analyzer</h1>
@@ -143,6 +154,10 @@
       <button class="btn primary" id="analyzeBtn" onclick="analyze()" disabled>Analysieren →</button>
     </div>
     <div class="min-dur-hint" id="durHint">Mind. 1 Sekunde aufnehmen für Analyse</div>
+    <div class="play-row" id="playRow">
+      <button class="play-btn" id="playBtn" onclick="togglePlay()" aria-label="Aufnahme abspielen">▶</button>
+      <span class="play-label" id="playLabel">Aufnahme abspielen</span>
+    </div>
   </div>
   <div class="card" id="profileCard" style="display:none">
     <div class="card-label">Lauttyp-Klassifikation</div>
@@ -240,6 +255,10 @@ let audioCtx, analyser, source, mediaStream;
 let recording = false, startTime = 0, animFrame;
 let freqHistory = [], volHistory = [], recordedData = null, durationSec = 0;
 
+// Audio-Replay & API-Cancel Support
+let mediaRecorder, recordedChunks = [], audioBlobUrl = null, audioElem = null;
+let analyzeAbortCtrl = null;
+
 // FIX: Uint8Array außerhalb drawLoop allokieren — kein GC-Druck bei 60fps (Bug 8)
 let freqDataBuf = new Uint8Array(1024);
 let timeDataBuf = new Uint8Array(1024);
@@ -253,9 +272,13 @@ async function toggleRec() { if (recording) { stopRec(); return; } await startRe
 
 async function startRec() {
   try {
+    // Laufende API-Anfrage abbrechen, falls vorhanden
+    if (analyzeAbortCtrl) { analyzeAbortCtrl.abort(); analyzeAbortCtrl = null; }
+    // Alte Replay-URL freigeben
+    if (audioBlobUrl) { URL.revokeObjectURL(audioBlobUrl); audioBlobUrl = null; }
+    document.getElementById('playRow').classList.remove('show');
     mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    // FIX: AudioContext auf iOS/Safari explizit resumieren (Bug 6)
     await audioCtx.resume();
     analyser = audioCtx.createAnalyser();
     analyser.fftSize = 2048;
@@ -265,6 +288,17 @@ async function startRec() {
     const bufLen = analyser.frequencyBinCount;
     freqDataBuf = new Uint8Array(bufLen);
     timeDataBuf = new Uint8Array(bufLen);
+    // MediaRecorder für Replay-Funktion
+    recordedChunks = [];
+    if (window.MediaRecorder) {
+      const mime = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm'
+                  : MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '';
+      try {
+        mediaRecorder = mime ? new MediaRecorder(mediaStream, { mimeType: mime }) : new MediaRecorder(mediaStream);
+        mediaRecorder.ondataavailable = e => { if (e.data && e.data.size > 0) recordedChunks.push(e.data); };
+        mediaRecorder.start();
+      } catch { mediaRecorder = null; }
+    }
     recording = true; startTime = Date.now(); freqHistory = []; volHistory = []; recordedData = null;
     const recBtn = document.getElementById('recBtn');
     recBtn.innerHTML = '<span class="rec-dot"></span> Aufnahme läuft...';
@@ -284,8 +318,24 @@ async function startRec() {
 
 function stopRec() {
   recording = false; cancelAnimationFrame(animFrame);
-  if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
-  if (audioCtx) audioCtx.close();
+  // MediaRecorder stoppen und Blob-URL für Replay erzeugen
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.onstop = () => {
+      if (recordedChunks.length > 0 && durationSec >= 1) {
+        const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+        if (audioBlobUrl) URL.revokeObjectURL(audioBlobUrl);
+        audioBlobUrl = URL.createObjectURL(blob);
+        document.getElementById('playRow').classList.add('show');
+        document.getElementById('playLabel').textContent = 'Aufnahme abspielen (' + durationSec.toFixed(1) + 's)';
+      }
+      if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
+      if (audioCtx && audioCtx.state !== 'closed') audioCtx.close();
+    };
+    try { mediaRecorder.stop(); } catch { /* already stopped */ }
+  } else {
+    if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
+    if (audioCtx && audioCtx.state !== 'closed') audioCtx.close();
+  }
   const recBtn = document.getElementById('recBtn');
   recBtn.innerHTML = '● Neue Aufnahme';
   recBtn.classList.remove('rec');
@@ -301,6 +351,24 @@ function stopRec() {
     setStatus('idle', 'Zu kurz — bitte mind. 1 Sekunde aufnehmen');
     document.getElementById('durHint').textContent = 'Mind. 1 Sekunde aufnehmen für Analyse';
   }
+}
+
+function togglePlay() {
+  if (!audioBlobUrl) return;
+  const btn = document.getElementById('playBtn');
+  if (audioElem && !audioElem.paused) {
+    audioElem.pause();
+    audioElem.currentTime = 0;
+    btn.textContent = '▶';
+    return;
+  }
+  audioElem = new Audio(audioBlobUrl);
+  audioElem.play().then(() => {
+    btn.textContent = '■';
+  }).catch(err => {
+    document.getElementById('playLabel').textContent = 'Wiedergabe-Fehler: ' + err.message;
+  });
+  audioElem.onended = () => { btn.textContent = '▶'; };
 }
 
 function drawLoop() {
@@ -418,9 +486,13 @@ async function analyze() {
   setStatus('live', 'KI-Analyse läuft...');
   const a = recordedData.analysis;
   const contourText = a.contourDiff > 40 ? 'steigend (+'+a.contourDiff+' Hz)' : a.contourDiff < -40 ? 'fallend ('+a.contourDiff+' Hz)' : 'stabil ('+a.contourDiff+' Hz)';
+  // Vorherige Anfrage abbrechen + neue AbortController-Instanz
+  if (analyzeAbortCtrl) analyzeAbortCtrl.abort();
+  analyzeAbortCtrl = new AbortController();
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
+      signal: analyzeAbortCtrl.signal,
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': apiKey,
@@ -453,10 +525,15 @@ async function analyze() {
     document.getElementById('tagRow').innerHTML = [parsed.emotionaler_zustand, ...(parsed.tags||[])].map((t,i) => '<span class="tag '+tagClasses[i%4]+'">' + t + '</span>').join('');
     setStatus('ready', 'Analyse abgeschlossen');
   } catch(e) {
-    document.getElementById('resultText').textContent = 'Fehler: ' + e.message;
-    setStatus('idle', 'Analyse fehlgeschlagen');
+    if (e.name === 'AbortError') {
+      document.getElementById('resultText').textContent = 'Analyse abgebrochen.';
+      setStatus('idle', 'Abgebrochen');
+    } else {
+      document.getElementById('resultText').textContent = 'Fehler: ' + e.message;
+      setStatus('idle', 'Analyse fehlgeschlagen');
+    }
   } finally {
-    // FIX: Button immer wieder freigeben, auch bei Fehler (Bug 4)
+    analyzeAbortCtrl = null;
     analyzeBtn.disabled = false;
     analyzeBtn.textContent = 'Erneut analysieren →';
   }
