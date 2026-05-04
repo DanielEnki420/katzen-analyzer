@@ -108,13 +108,18 @@
   .play-btn { width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--border2); background: var(--bg2); color: var(--text); font-size: 11px; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; transition: all 0.15s; }
   .play-btn:hover { border-color: var(--green); color: var(--green); }
   .play-label { font-size: 10px; color: var(--text3); letter-spacing: 0.04em; }
+  .reply-row { display: flex; align-items: center; gap: 12px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .reply-btn { flex: 0 0 auto; background: rgba(91,156,246,0.1); border-color: rgba(91,156,246,0.35); color: var(--blue); }
+  .reply-btn:hover:not(:disabled) { background: rgba(91,156,246,0.2); border-color: rgba(91,156,246,0.55); color: var(--blue); }
+  .reply-btn.playing { background: rgba(61,220,132,0.12); border-color: rgba(61,220,132,0.45); color: var(--green); }
+  .reply-hint { font-size: 10px; color: var(--text3); letter-spacing: 0.04em; }
   :focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
 </style>
 </head>
 <body>
 <div class="page">
   <header>
-    <div class="institute">Institut für angewandte Felinistik · <span>v3.3.0</span> · Landshut</div>
+    <div class="institute">Institut für angewandte Felinistik · <span>v3.4.0</span> · Landshut</div>
     <div class="header-title">
       <img src="kater.jpg" alt="Kater Logo" class="kater-logo">
       <h1>Katzen<em>Vokal</em><br>Analyzer</h1>
@@ -163,6 +168,10 @@
     <div class="card-label">Lauttyp-Klassifikation</div>
     <div id="profileBars"></div>
     <div class="sci-note" id="sciNote"></div>
+    <div class="reply-row" id="replyRow" style="display:none">
+      <button class="btn reply-btn" id="replyBtn" onclick="replyToCat()">🐱 Antworten</button>
+      <span class="reply-hint" id="replyHint">Synthetisiere artgerechte Antwort</span>
+    </div>
   </div>
   <div class="card" id="resultCard" style="display:none">
     <div class="card-label">KI-Interpretation</div>
@@ -307,6 +316,7 @@ async function startRec() {
     document.getElementById('analyzeBtn').disabled = true;
     document.getElementById('profileCard').style.display = 'none';
     document.getElementById('resultCard').style.display = 'none';
+    document.getElementById('replyRow').style.display = 'none';
     document.getElementById('durHint').textContent = 'Aufnahme läuft — Katze anmiauen lassen!';
     setStatus('live', 'Aufnahme aktiv');
     drawLoop();
@@ -351,6 +361,142 @@ function stopRec() {
     setStatus('idle', 'Zu kurz — bitte mind. 1 Sekunde aufnehmen');
     document.getElementById('durHint').textContent = 'Mind. 1 Sekunde aufnehmen für Analyse';
   }
+}
+
+// === Katzenlaut-Synthese (Web Audio API) ===
+let synthCtx = null;
+function getSynthCtx() {
+  if (!synthCtx || synthCtx.state === 'closed') {
+    synthCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (synthCtx.state === 'suspended') synthCtx.resume();
+  return synthCtx;
+}
+
+function synthMiau(ctx, t0, baseFreq = 480, dur = 0.7) {
+  // Miau: aufsteigend-fallender Sweep mit Vokalformanten (~500 + 1500 Hz)
+  const out = ctx.createGain();
+  out.gain.setValueAtTime(0, t0);
+  out.gain.linearRampToValueAtTime(0.35, t0 + 0.05);
+  out.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+  // Carrier (Sägezahn für Obertöne)
+  const osc = ctx.createOscillator();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(baseFreq * 0.85, t0);
+  osc.frequency.linearRampToValueAtTime(baseFreq * 1.25, t0 + dur * 0.35);
+  osc.frequency.linearRampToValueAtTime(baseFreq * 0.7, t0 + dur);
+  // Formant-Filter (simuliert "ah/ow"-Vokal)
+  const f1 = ctx.createBiquadFilter();
+  f1.type = 'bandpass'; f1.frequency.value = 700; f1.Q.value = 6;
+  const f2 = ctx.createBiquadFilter();
+  f2.type = 'bandpass'; f2.frequency.value = 1500; f2.Q.value = 8;
+  osc.connect(f1); osc.connect(f2);
+  f1.connect(out); f2.connect(out);
+  out.connect(ctx.destination);
+  osc.start(t0); osc.stop(t0 + dur + 0.05);
+  return dur;
+}
+
+function synthSchnurren(ctx, t0, dur = 2.5) {
+  // Schnurren: ~28 Hz Carrier mit Amplituden-Modulation, Tiefpass
+  const out = ctx.createGain();
+  out.gain.setValueAtTime(0, t0);
+  out.gain.linearRampToValueAtTime(0.5, t0 + 0.15);
+  out.gain.setValueAtTime(0.5, t0 + dur - 0.2);
+  out.gain.linearRampToValueAtTime(0, t0 + dur);
+  // Carrier
+  const osc = ctx.createOscillator();
+  osc.type = 'sawtooth';
+  osc.frequency.value = 28;
+  // Tremolo (Rumpeln)
+  const lfo = ctx.createOscillator();
+  lfo.frequency.value = 25;
+  const lfoGain = ctx.createGain();
+  lfoGain.gain.value = 0.4;
+  lfo.connect(lfoGain);
+  // Tiefpass
+  const lp = ctx.createBiquadFilter();
+  lp.type = 'lowpass'; lp.frequency.value = 200; lp.Q.value = 1.2;
+  // Amplitude
+  const amGain = ctx.createGain();
+  amGain.gain.value = 0.6;
+  lfoGain.connect(amGain.gain);
+  osc.connect(lp); lp.connect(amGain); amGain.connect(out); out.connect(ctx.destination);
+  osc.start(t0); lfo.start(t0); osc.stop(t0 + dur); lfo.stop(t0 + dur);
+  return dur;
+}
+
+function synthFauchen(ctx, t0, dur = 0.8) {
+  // Fauchen: weißes Rauschen durch Hochpass
+  const bufferSize = ctx.sampleRate * dur;
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+  const noise = ctx.createBufferSource();
+  noise.buffer = buffer;
+  const hp = ctx.createBiquadFilter();
+  hp.type = 'highpass'; hp.frequency.value = 2000; hp.Q.value = 0.7;
+  const out = ctx.createGain();
+  out.gain.setValueAtTime(0, t0);
+  out.gain.linearRampToValueAtTime(0.3, t0 + 0.05);
+  out.gain.setValueAtTime(0.3, t0 + dur - 0.15);
+  out.gain.linearRampToValueAtTime(0, t0 + dur);
+  noise.connect(hp); hp.connect(out); out.connect(ctx.destination);
+  noise.start(t0); noise.stop(t0 + dur);
+  return dur;
+}
+
+function synthTriller(ctx, t0, dur = 0.6) {
+  // Chirp/Triller: Schnelle Frequenzmodulation auf hohem Träger
+  const out = ctx.createGain();
+  out.gain.setValueAtTime(0, t0);
+  out.gain.linearRampToValueAtTime(0.3, t0 + 0.04);
+  out.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+  const osc = ctx.createOscillator();
+  osc.type = 'triangle';
+  osc.frequency.setValueAtTime(700, t0);
+  osc.frequency.linearRampToValueAtTime(950, t0 + dur);
+  // Schneller Vibrato (~25 Hz Modulation)
+  const lfo = ctx.createOscillator();
+  lfo.frequency.value = 28;
+  const lfoGain = ctx.createGain();
+  lfoGain.gain.value = 80;
+  lfo.connect(lfoGain); lfoGain.connect(osc.frequency);
+  osc.connect(out); out.connect(ctx.destination);
+  osc.start(t0); lfo.start(t0); osc.stop(t0 + dur); lfo.stop(t0 + dur);
+  return dur;
+}
+
+function synthKlagen(ctx, t0, dur = 1.4) {
+  // Klagen: längeres Miau mit fallendem Bogen
+  return synthMiau(ctx, t0, 520, dur);
+}
+
+const REPLY_MAP = {
+  'Miau / Forderung':    { fn: synthMiau,     hint: 'Freundliches Miau zurück' },
+  'Schnurren':           { fn: synthSchnurren, hint: 'Beruhigender Purr (~28 Hz)' },
+  'Triller / Chirpen':   { fn: synthTriller,  hint: 'Verspieltes Chirpen' },
+  'Fauchen / Warnung':   { fn: synthSchnurren, hint: 'Sanftes Beschwichtigen' }, // deeskalieren statt zurück fauchen
+  'Klagen / Protest':    { fn: synthKlagen,   hint: 'Empathisches Miau' },
+};
+
+function replyToCat() {
+  if (!recordedData?.analysis) return;
+  const dominant = recordedData.analysis.dominant;
+  const reply = REPLY_MAP[dominant] || REPLY_MAP['Miau / Forderung'];
+  const ctx = getSynthCtx();
+  const btn = document.getElementById('replyBtn');
+  const hint = document.getElementById('replyHint');
+  btn.disabled = true;
+  btn.classList.add('playing');
+  btn.textContent = '🔊 Spielt...';
+  hint.textContent = reply.hint;
+  const dur = reply.fn(ctx, ctx.currentTime + 0.05);
+  setTimeout(() => {
+    btn.disabled = false;
+    btn.classList.remove('playing');
+    btn.textContent = '🐱 Nochmal antworten';
+  }, (dur + 0.15) * 1000);
 }
 
 function togglePlay() {
@@ -467,6 +613,14 @@ function buildProfile() {
   };
   document.getElementById('sciNote').textContent = sciNotes[dominant] || '';
   recordedData.analysis = { avgFreq: Math.round(avgFreq), avgVol: Math.round(avgVol), duration, contourDiff: Math.round(contourDiff), freqVar: Math.round(freqVar), dominant, scores };
+  // Antwort-Button verfügbar machen (auch ohne KI-Analyse)
+  const replyMeta = REPLY_MAP[dominant] || REPLY_MAP['Miau / Forderung'];
+  document.getElementById('replyRow').style.display = 'flex';
+  const replyBtn = document.getElementById('replyBtn');
+  replyBtn.textContent = '🐱 Antworten';
+  replyBtn.disabled = false;
+  replyBtn.classList.remove('playing');
+  document.getElementById('replyHint').textContent = replyMeta.hint;
 }
 
 async function analyze() {
