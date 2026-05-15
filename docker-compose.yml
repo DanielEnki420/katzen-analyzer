@@ -4,7 +4,7 @@ services:
     container_name: katzen-analyzer
     restart: unless-stopped
     ports:
-      - "8300:80"
+      - "127.0.0.1:8300:80"
     volumes:
       - ./index.html:/usr/share/nginx/html/index.html:ro
       - ./manifest.webmanifest:/usr/share/nginx/html/manifest.webmanifest:ro
@@ -33,3 +33,7 @@ services:
 networks:
   katzen-net:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.16.0.0/24
+          gateway: 172.16.0.1
