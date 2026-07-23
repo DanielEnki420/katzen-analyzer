@@ -4,6 +4,8 @@
 
 *Institut für angewandte Felinistik · Landshut*
 
+### 🔗 [Live-Demo: danielenki420.github.io/katzen-analyzer](https://danielenki420.github.io/katzen-analyzer/)
+
 ---
 
 ## Überblick
