@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Daniel Enki (DanielEnki420). Alle Rechte vorbehalten / All Rights Reserved.
 // Echtes Offline-PWA: cacht die App-Shell. API-Calls werden nie gecacht.
 
-const CACHE = 'katzen-v3.13.0';
+const CACHE = 'katzen-v4.0.0';
 // Relative URLs → funktionieren unter beiden Scopes (GitHub /katzen-analyzer/ und Pi5 /)
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'kater.jpg'];
 

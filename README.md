@@ -40,17 +40,30 @@ Autoren.
 
 ## ⚖️ Copyright & Lizenz
 
-**Copyright © 2026 Daniel Enki (DanielEnki420). Alle Rechte vorbehalten / All Rights Reserved.**
+**Copyright © 2026 Daniel Enki (DanielEnki420).**
+Lizenziert unter der **[Apache License 2.0](./LICENSE)**.
 
-Dieses Projekt ist **proprietär** und steht unter einer restriktiven Lizenz.
+Du darfst den Code nutzen, verändern und weitergeben — auch kommerziell —,
+solange Copyright- und Lizenzhinweis erhalten bleiben und Änderungen
+kenntlich gemacht werden. Die Software wird „AS IS" ohne Gewährleistung
+bereitgestellt. Vollständiger Text: siehe [`LICENSE`](./LICENSE).
 
-- ✅ **Erlaubt:** Ansehen des Quellcodes auf GitHub zu Informationszwecken.
-- ❌ **Nicht erlaubt** (ohne schriftliche Genehmigung des Urhebers): Kopieren,
-  Herunterladen, Verändern, Weiterverbreiten, Veröffentlichen, kommerzielle oder
-  nicht-kommerzielle Nutzung, Einsatz in eigenen Projekten.
+> **Ausnahme:** Das eingebettete Katzenfoto (`kater.jpg` bzw. das Base64-Logo
+> in `index.html`) ist ein privates Foto des Urhebers und **nicht** von der
+> Apache-Lizenz erfasst — bitte durch ein eigenes Bild ersetzen.
 
-Das eingebettete Katzenfoto ist ein privates Foto des Urhebers und genießt
-denselben Schutz.
+### 🔑 API-Schlüssel & KI-Anbieter
 
-Vollständige Bedingungen: siehe [`LICENSE`](./LICENSE).
-Lizenzanfragen über: [github.com/DanielEnki420](https://github.com/DanielEnki420)
+Die App bringt **keinen** eigenen Schlüssel mit. Jede/r nutzt den **eigenen
+API-Schlüssel** eines unterstützten Anbieters (Bring-your-own-Key):
+
+| Anbieter | Kostenlose Option | Schlüssel holen |
+|----------|-------------------|-----------------|
+| **OpenRouter** | ✅ viele `:free`-Modelle | <https://openrouter.ai/keys> |
+| **Groq** | ✅ gratis, sehr schnell | <https://console.groq.com/keys> |
+| **Anthropic Claude** | 💰 kostenpflichtig | <https://console.anthropic.com/settings/keys> |
+
+Der Schlüssel wird **ausschließlich lokal im Browser** (localStorage)
+gespeichert und geht per `fetch` **direkt** an den jeweiligen Anbieter —
+es gibt keinen Server, der den Schlüssel sieht oder speichert. Für die
+eigenen API-Kosten ist jede/r Nutzer/in selbst verantwortlich.
