@@ -1,8 +1,8 @@
 // KatzenVokal-Analyzer — Service Worker
-// Copyright (c) 2026 Daniel Enki (DanielEnki420). Alle Rechte vorbehalten / All Rights Reserved.
+// Copyright (c) 2026 Daniel Enki (DanielEnki420). Lizenziert unter Apache-2.0 — siehe LICENSE.
 // Echtes Offline-PWA: cacht die App-Shell. API-Calls werden nie gecacht.
 
-const CACHE = 'katzen-v4.0.0';
+const CACHE = 'katzen-v4.1.0';
 // Relative URLs → funktionieren unter beiden Scopes (GitHub /katzen-analyzer/ und Pi5 /)
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'kater.jpg'];
 

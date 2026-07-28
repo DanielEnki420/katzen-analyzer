@@ -1,6 +1,5 @@
-// KatzenVokal-Analyzer — API-Proxy
-// Copyright (c) 2026 Daniel Enki (DanielEnki420). Alle Rechte vorbehalten / All Rights Reserved.
-// Proprietär — siehe LICENSE. Keine Nutzung ohne schriftliche Genehmigung.
+// KatzenVokal-Analyzer — API-Proxy (legacy/optional seit v4.0.0 — App ruft Anbieter browser-direkt auf)
+// Copyright (c) 2026 Daniel Enki (DanielEnki420). Lizenziert unter Apache-2.0 — siehe LICENSE.
 //
 // Minimaler, gehärteter CORS-Forwarding-Proxy für Anthropic.
 // Nimmt den x-api-key aus dem Request-Header und leitet an api.anthropic.com weiter.
