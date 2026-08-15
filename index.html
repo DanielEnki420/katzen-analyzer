@@ -9,7 +9,7 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src data:; img-src 'self' data:; media-src 'self' blob:; connect-src 'self' https://openrouter.ai https://api.groq.com https://api.anthropic.com; object-src 'none'; base-uri 'none'; frame-ancestors 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://analytics.oli-vera.eu; style-src 'self' 'unsafe-inline'; font-src data:; img-src 'self' data:; media-src 'self' blob:; connect-src 'self' https://openrouter.ai https://api.groq.com https://api.anthropic.com https://analytics.oli-vera.eu; object-src 'none'; base-uri 'none'; frame-ancestors 'none'">
 <meta name="copyright" content="© 2026 Daniel Enki (DanielEnki420). Lizenziert unter Apache-2.0.">
 <meta name="author" content="Daniel Enki (DanielEnki420)">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -335,10 +335,45 @@
     <a href="https://github.com/DanielEnki420/katzen-analyzer" target="_blank" rel="noopener noreferrer">github.com/DanielEnki420</a>
     <span>McComb et al., 2009 · Schötz, 2017</span>
     <span>*fiktives Institut — 🎭 Entertainment-/Lernprojekt, keine wissenschaftlich validierte Analyse. Nicht für Gesundheits- oder Verhaltensentscheidungen geeignet.</span>
+    <span style="display:block;margin-top:8px;">
+      <label style="cursor:pointer; display:inline-flex; align-items:center; gap:6px;">
+        <input type="checkbox" id="analytics-toggle" onchange="toggleAnalytics(this.checked)" style="width:auto;margin:0;">
+        📊 Anonyme Nutzungsstatistik helfen (optional, standardmäßig aus)
+      </label>
+    </span>
   </footer>
 </div>
 
 <script>
+const ANALYTICS_KEY = 'katzen_analytics_consent';
+const UMAMI_WEBSITE_ID = '953e2382-44a0-4357-8b67-1c870c5acb2b';
+
+function analyticsEnabled() {
+    return localStorage.getItem(ANALYTICS_KEY) === '1';
+}
+
+function loadAnalytics() {
+    if (window.umami || document.getElementById('umami-script')) return;
+    const s = document.createElement('script');
+    s.id = 'umami-script';
+    s.defer = true;
+    s.src = 'https://analytics.oli-vera.eu/script.js';
+    s.setAttribute('data-website-id', UMAMI_WEBSITE_ID);
+    s.setAttribute('data-auto-track', 'false');
+    s.setAttribute('data-do-not-track', 'true');
+    document.head.appendChild(s);
+}
+
+function track(eventName) {
+    if (!analyticsEnabled()) return;
+    if (window.umami && window.umami.track) window.umami.track(eventName);
+}
+
+function toggleAnalytics(enabled) {
+    localStorage.setItem(ANALYTICS_KEY, enabled ? '1' : '0');
+    if (enabled) loadAnalytics();
+}
+
 // === MULTI-PROVIDER (Bring-your-own-Key, Direkt-aus-Browser, kein Server) ===
 // Flaches Config-Objekt statt Framework: zwei Formate genügen ('openai' + 'anthropic').
 // OpenRouter, Groq & Claude sind BYO-Key — der Schlüssel bleibt in localStorage und
@@ -945,6 +980,7 @@ function downloadBlob(blob, filename) {
 function exportHistory(fmt) {
   const h = loadHistory();
   if (h.length === 0) { alert('Kein Verlauf zum Exportieren.'); return; }
+  track('history_exported');
   const stamp = new Date().toISOString().slice(0, 10);
   if (fmt === 'json') {
     downloadBlob(new Blob([JSON.stringify(h, null, 2)], { type: 'application/json' }), 'katzen-verlauf_' + stamp + '.json');
@@ -964,6 +1000,7 @@ function exportHistory(fmt) {
 let summaryAbortCtrl = null;
 async function dailySummary() {
   if (!ensureKey()) return;
+  track('daily_summary_used');
   const h = loadHistory();
   const heute = new Date(); heute.setHours(0, 0, 0, 0);
   const today = h.filter(e => e.t >= heute.getTime());
@@ -1252,6 +1289,9 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+  const analyticsToggle = document.getElementById('analytics-toggle');
+  if (analyticsToggle) analyticsToggle.checked = analyticsEnabled();
+  if (analyticsEnabled()) loadAnalytics();
 });
 
 // AudioBuffer → WAV (PCM 16-bit) kodieren
@@ -1453,6 +1493,7 @@ function buildProfile() {
 async function analyze() {
   if (!recordedData?.analysis) return;
   if (!ensureKey()) return;
+  track('ai_interpretation_run');
   // FIX: Button während Analyse sperren — verhindert parallele Requests (Bug 4)
   const analyzeBtn = document.getElementById('analyzeBtn');
   analyzeBtn.disabled = true;
@@ -1523,9 +1564,8 @@ async function analyze() {
   font:13px/1.65 ui-monospace,SFMono-Regular,Menlo,monospace;opacity:.72">
 <summary style="cursor:pointer;letter-spacing:.05em">Datenschutz / Privacy</summary>
 <div style="margin-top:1rem">
-<p><b>Diese Seite läuft vollständig in deinem Browser.</b> Sie setzt keine Cookies, bindet
-keine Analyse- oder Tracking-Dienste ein und lädt beim Aufruf keine externen Ressourcen —
-Schriften und Skripte werden mitgeliefert.</p>
+<p><b>Diese Seite läuft vollständig in deinem Browser.</b> Sie setzt keine Cookies und lädt
+beim Aufruf keine externen Ressourcen — Schriften und Skripte werden mitgeliefert.</p>
 <p><b>Hosting:</b> Die Seite liegt auf GitHub Pages (GitHub Inc., USA). Beim Abruf
 protokolliert GitHub technisch notwendige Zugriffsdaten einschließlich deiner IP-Adresse.
 Darauf hat der Betreiber dieser Seite keinen Einfluss —
@@ -1533,17 +1573,19 @@ Darauf hat der Betreiber dieser Seite keinen Einfluss —
 <p><b>Was lokal bleibt:</b> Dein API-Schlüssel und dein Verlauf werden ausschließlich im localStorage deines Browsers gespeichert und niemals an den Betreiber übertragen. Es gibt
 keinen Server hinter dieser Seite.</p>
 <p><b>Was hinausgeht:</b> Der Zugriff auf das Mikrofon erfolgt nur nach deiner ausdrücklichen Freigabe. Aufnahme, FFT-Analyse und Synthese laufen vollständig offline — <b>die Audioaufnahme verlässt deinen Browser nicht</b>. Startest du eine Deutung, gehen nur die daraus berechneten Kennwerte als Text an den von dir gewählten Anbieter (OpenRouter, Groq oder Anthropic), mit deinem eigenen Schlüssel.</p>
+<p><b>Optionale Statistik (standardmäßig AUS):</b> Über den Schalter im Footer kannst du eine anonyme Nutzungsstatistik aktivieren (selbstgehostetes Umami, kein Google Analytics, keine Cookies, keine IP-Speicherung). Erst dann werden einzelne Aktionen wie "KI-Deutung genutzt" an <code>analytics.oli-vera.eu</code> übertragen — ohne Aktivierung passiert nichts.</p>
 <p><b>Verantwortlich / Kontakt:</b>
 <a href="https://github.com/DanielEnki420" target="_blank" rel="noopener">github.com/DanielEnki420</a></p>
 <hr style="border:0;border-top:1px solid currentColor;opacity:.2;margin:1.2rem 0">
-<p><b>This page runs entirely in your browser.</b> No cookies, no analytics, no tracking,
-and no external resources are loaded — fonts and scripts ship with the page.</p>
+<p><b>This page runs entirely in your browser.</b> No cookies, and no external resources
+are loaded — fonts and scripts ship with the page.</p>
 <p><b>Hosting:</b> served from GitHub Pages (GitHub Inc., USA). GitHub logs technically
 necessary access data including your IP address; the operator of this page has no control
 over that — <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement" target="_blank" rel="noopener">GitHub privacy statement</a>.</p>
 <p><b>Stays local:</b> Your API key and history are stored only in your browser's localStorage, and is never transmitted to the operator. There is no
 server behind this page.</p>
 <p><b>Leaves the page:</b> Microphone access happens only after you explicitly allow it. Recording, FFT analysis and synthesis run entirely offline — <b>the audio never leaves your browser</b>. When you request an interpretation, only the derived measurements are sent as text to the provider you chose (OpenRouter, Groq or Anthropic), using your own key.</p>
+<p><b>Optional analytics (off by default):</b> The toggle in the footer lets you enable anonymous usage statistics (self-hosted Umami, no Google Analytics, no cookies, no IP storage). Only then are individual actions like "AI interpretation used" sent to <code>analytics.oli-vera.eu</code> — nothing happens unless you turn it on.</p>
 <p><b>Controller / contact:</b>
 <a href="https://github.com/DanielEnki420" target="_blank" rel="noopener">github.com/DanielEnki420</a></p>
 </div>
